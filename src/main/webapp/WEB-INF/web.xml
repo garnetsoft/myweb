@@ -8,13 +8,14 @@
     <welcome-file-list>
         <welcome-file>index.html</welcome-file>
     </welcome-file-list>
-
+    
     <servlet>
         <servlet-name>events</servlet-name>
         <servlet-class>AsyncServlet</servlet-class>
+        
         <init-param>
          	<param-name>kdbConfig</param-name>
-         	<param-value>config/atdb.conf</param-value>
+         	<param-value>config/qtickES.properties</param-value>
      	</init-param>
         <init-param>
          	<param-name>sqlPath</param-name>
@@ -23,10 +24,89 @@
      
         <async-supported>true</async-supported>
     </servlet>
-
     <servlet-mapping>
         <servlet-name>events</servlet-name>
         <url-pattern>/ajax</url-pattern>
     </servlet-mapping>
+    
+    <servlet>
+        <servlet-name>silver</servlet-name>
+        <servlet-class>AsyncServlet</servlet-class>
+        
+        <init-param>
+         	<param-name>kdbConfig</param-name>
+         	<param-value>config/qtickSI.properties</param-value>
+     	</init-param>
+        <init-param>
+         	<param-name>sqlPath</param-name>
+         	<param-value>config</param-value>
+     	</init-param>
+     
+        <async-supported>true</async-supported>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>silver</servlet-name>
+        <url-pattern>/SI</url-pattern>
+    </servlet-mapping>
+    
+    <servlet>
+        <servlet-name>us5y</servlet-name>
+        <servlet-class>AsyncServlet</servlet-class>
+        
+        <init-param>
+         	<param-name>kdbConfig</param-name>
+         	<param-value>config/qtickFV2.properties</param-value>
+     	</init-param>
+        <init-param>
+         	<param-name>sqlPath</param-name>
+         	<param-value>config</param-value>
+     	</init-param>
+     
+        <async-supported>true</async-supported>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>us5y</servlet-name>
+        <url-pattern>/FV2</url-pattern>
+    </servlet-mapping>
 
+    <servlet>
+        <servlet-name>ultraWN</servlet-name>
+        <servlet-class>AsyncServlet</servlet-class>
+        
+        <init-param>
+         	<param-name>kdbConfig</param-name>
+         	<param-value>config/qtickWN.properties</param-value>
+     	</init-param>
+        <init-param>
+         	<param-name>sqlPath</param-name>
+         	<param-value>config</param-value>
+     	</init-param>
+     
+        <async-supported>true</async-supported>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>ultraWN</servlet-name>
+        <url-pattern>/WN</url-pattern>
+    </servlet-mapping>
+
+    <servlet>
+        <servlet-name>russel2k</servlet-name>
+        <servlet-class>AsyncServlet</servlet-class>
+        
+        <init-param>
+         	<param-name>kdbConfig</param-name>
+         	<param-value>config/qtickRTA.properties</param-value>
+     	</init-param>
+        <init-param>
+         	<param-name>sqlPath</param-name>
+         	<param-value>config</param-value>
+     	</init-param>
+     
+        <async-supported>true</async-supported>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>russel2k</servlet-name>
+        <url-pattern>/RTA</url-pattern>
+    </servlet-mapping>
+    
 </web-app>

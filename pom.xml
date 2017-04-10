@@ -2,8 +2,9 @@
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.javacodegeeks.snippets.enterprise</groupId>
-	<artifactId>embedded-jetty-example</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<artifactId>myweb</artifactId>
+	<packaging>war</packaging>
+	<version>0.0.1-beta</version>
 	
 	<dependencies>
 
@@ -62,7 +63,7 @@
   			  <configuration>
     			<scanIntervalSeconds>10</scanIntervalSeconds>
     			<webApp>
-      				<contextPath>/webapp</contextPath>
+      				<contextPath>/</contextPath>
     			</webApp>
   			</configuration>
 		</plugin>

@@ -3,7 +3,9 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +18,7 @@ import static java.nio.file.Paths.get;
 
 import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
+import org.codehaus.jettison.json.JSONArray;
 
 import kx.c;
 import kx.c.Flip;
@@ -41,16 +44,17 @@ public class KdbService2 {
 	private  boolean enabled;
 	private  long interval;
 	
+	private List<String> sections;
+	private List<String> sqlFiles;
+	
 	private Map<String,String> queryMap = new HashMap<String,String>();
 	private Map<String,Flip> dataTables = new HashMap<String,Flip>();
 	
 	public KdbService2(String configFile, String sqlPath, BlockingQueue<Object> queue) {
 		this.configFile = configFile;
-		this.sqlPath = sqlPath;
-		
+		this.sqlPath = sqlPath;		
 		this.queue = queue;
 		
-		// load Properties 
 		loadProperties();
 	}
 	
@@ -64,7 +68,7 @@ public class KdbService2 {
 		String filePath = file.getAbsolutePath();
 		String path = file.getPath();
 		String parent = file.getParent();
-		log.info("loading config file from: " + parent);
+		log.info("loading config file from: " + configFile);
 		
 		try (final InputStream stream = new FileInputStream(configFile)) {
 			log.info("xxxx stream: " + stream);
@@ -78,28 +82,26 @@ public class KdbService2 {
 		}
 
 		log.info("xxxx conf: " + p);
-		// 
+		// update interval - 
+		this.interval = Integer.parseInt(p.getProperty("interval", "5"));		
 		this.enabled = Boolean.parseBoolean(p.getProperty("enabled", "true"));
 		this.host = p.getProperty("khost");
 		this.port = Integer.parseInt(p.getProperty("kport"));
 		
 		// sections: 
-		List<String> sections = (List) Arrays.asList(p.getProperty("sections").split(","));
-		List<String> sqlFiles = (List) Arrays.asList(p.getProperty("sqlFiles").split(","));
+		this.sections = (List<String>) Arrays.asList(p.getProperty("sections").split(","));	
+		this.sqlFiles = (List<String>) Arrays.asList(p.getProperty("sqlFiles").split(","));
 		
 		try {
 			// cache the sqlFiles 
 			for (int i = 0; i < sections.size(); i++) {
-				// read q files
 				String section = sections.get(i);
 				String sqlFile = sqlFiles.get(i);
-				
-				log.info("xxxx loading section: " + section);
-				log.info("xxxx loading sqlFile: " + sqlFile);
-				
 				String sqlPath = parent+"/"+sqlFile;
 				String sqlCode = new String(Files.readAllBytes(get(sqlPath)));
 				
+				log.info("xxxx loading section: " + section);
+				log.info("xxxx loading sqlFile: " + sqlFile);
 				log.info("xxxx loading sqlCode: " + sqlCode);
 
 				queryMap.put(section, sqlCode);
@@ -108,9 +110,8 @@ public class KdbService2 {
 		catch (IOException io) {
 			log.error("ERROR loading config/sql data: " );
 		}
-		
-		// start kdb service
-		doStart();
+				
+		doStart(); // start kdb service
 	}
 	
 	public void doStart() {
@@ -133,20 +134,6 @@ public class KdbService2 {
 		}
 		catch (IOException e) {
 			log.error("ERROR: closing kdb connection", e);
-		}
-	}
-	
-	private void connectionLoad() throws Exception {
-		if (connectToKdb()) {
-			try {
-				new Thread(new KdbListener()).start();
-			}
-			catch (Exception e) {
-				log.error("ERROR: KDB Service not started");
-			}
-		}
-		else {
-			throw new Exception("Kdb connection error");
 		}
 	}
 	
@@ -185,7 +172,7 @@ public class KdbService2 {
 					}
 					else if (COUNTER > TRY_ONE_FAIL) {
 						try {
-							Thread.sleep(interval);
+							Thread.sleep(interval*1000);
 						}
 						catch (InterruptedException ie) {
 							ie.printStackTrace();
@@ -196,10 +183,23 @@ public class KdbService2 {
 		}
 	}
 	
+	private void connectionLoad() throws Exception {
+		if (connectToKdb()) {
+			try {			
+				new Thread(new KdbListener()).start();
+			}
+			catch (Exception e) {
+				log.error("ERROR: KDB Service not started");
+			}
+		}
+		else {
+			throw new Exception("Kdb connection error");
+		}
+	}
+	
 	private class KdbListener implements Runnable {
 		// process queries from sqlPath and add results to Map<String, Object> 
-		
-		
+				
 		// starting Kdb query service 
 		@Override
 		public void run() {
@@ -217,23 +217,30 @@ public class KdbService2 {
 						
 						dataTables.put(table, data);
 					}
+										
+					processKdbData(); // trigger UI update
 					
-					// trigger UI update
-					processKdbData();
-					
-					Thread.sleep(5*1000); // use updateInterval from config file
+					Thread.sleep(interval*1000); // use updateInterval from config file
 				}
 				catch (InterruptedException | IOException | KException e) {
 					log.error("ERROR: kdb query thread stopped. ", e);
 					e.printStackTrace();
+					
+					int reconn = 1; 
+					try {
+						Thread.sleep(interval*1000*reconn);
+						reconn *= 2;  // diminishing the reconn impact
+												
+					} catch (InterruptedException e1) {
+						e1.printStackTrace();
+					}
 				}
-				
 			}
 		}
 	}
 	
 	// send it to consumer queue
-	private void processKdbData() {
+	private void processKdbData2() {
 		// send cached data to UI for display
 		// is it better to update it on another thread
 		try {
@@ -241,12 +248,15 @@ public class KdbService2 {
 			// format the data in HTML / JSON
 			StringBuilder html = new StringBuilder();
 			
-			for (Map.Entry<String, Flip> table : dataTables.entrySet()) {
+			/*for (Map.Entry<String, Flip> table : dataTables.entrySet()) {
 				html.append(toHtml(table.getKey(), table.getValue()));
+			}*/
+			
+			// preserve the sections order from config
+			for (String sec : sections) {
+				html.append(toHtml(sec, dataTables.get(sec)));
 			}
 			
-			//System.out.println("HTML: " + html.toString());
-
 			this.queue.put(html.toString());
 			
 		} catch (Exception e) {
@@ -255,8 +265,10 @@ public class KdbService2 {
 	}
 	
 	private String toHtml(String table, Flip flip) {
+		boolean is_orderbook = table.startsWith("OrderBook") ? true : false;
+		
 		StringBuilder sb = new StringBuilder();
-		sb.append("<b>").append(table).append("</b><br/>");
+		sb.append("<br/><b>").append(table).append("</b><br/><br/>");
 		
 		KxDataModel model = new KxDataModel(flip);
 		int rows = model.getRowCount();
@@ -272,13 +284,111 @@ public class KdbService2 {
 		sb.append("</tr>");
 		
 		for (int rowIndex = 0; rowIndex < rows; rowIndex++) {
+			
 			if (rowIndex % 2 == 1) 
 				sb.append("<tr BGCOLOR=\"#99CCFF\">");
 			else 
 				sb.append("<tr>");
 			
 			for (int columnIndex = 0; columnIndex < cols; columnIndex++) {
-				sb.append("<td>").append(model.getValueAt(rowIndex, columnIndex)).append("");
+				Object cell = model.getValueAt(rowIndex, columnIndex);
+				sb.append("<td>").append(cell == null ? "" : cell).append("");
+			}
+			sb.append("</tr>");
+		}
+		sb.append("</table>");
+		sb.append("<br/>");
+		
+		return sb.toString();
+	}
+	
+	private String toOrderBook(String table, Flip flip) {
+		boolean is_orderbook = table.startsWith("OrderBook") ? true : false;
+		
+		StringBuilder sb = new StringBuilder();
+		sb.append("<br/><b>").append(table).append("</b><br/><br/>");
+		
+		KxDataModel model = new KxDataModel(flip);
+		int rows = model.getRowCount();
+		int cols = model.getColumnCount();
+		
+		sb.append("<table id=\"").append(table).append("\" border=\"1\">");
+		// header <b></b>
+		
+		sb.append("<tr BGCOLOR=\"#99CCFF\">");
+		for (int i = 0; i < cols; i++) {
+			sb.append("<td>").append(model.getColumnName(i)).append("</td>");
+		}
+		sb.append("</tr>");
+		
+		for (int rowIndex = 0; rowIndex < rows; rowIndex++) {
+			
+			if (rowIndex % 2 == 1) 
+				sb.append("<tr BGCOLOR=\"#99CCFF\">");
+			else 
+				sb.append("<tr>");
+			
+			for (int columnIndex = 0; columnIndex < cols; columnIndex++) {
+				Object cell = model.getValueAt(rowIndex, columnIndex);
+				sb.append("<td>").append(cell == null ? "" : cell).append("");
+			}
+			sb.append("</tr>");
+		}
+		sb.append("</table>");
+		sb.append("<br/>");
+		
+		return sb.toString();
+	}
+
+	// send it to consumer queue
+	private void processKdbData() {
+		try {
+			JSONArray json = new JSONArray();
+			
+			// add an UI update timer
+			json.put("<h><font face='Arial' size='-1'><em>Last update: " + new Date() + "<br/>");
+			
+			// preserve the sections order from config			
+			for (String sec : sections) {
+				json.put(toJson(sec, dataTables.get(sec)));
+			}
+			
+			this.queue.put(json);
+			
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	private String toJson(String table, Flip flip) {
+		boolean is_orderbook = table.startsWith("OrderBook") ? true : false;
+		
+		StringBuilder sb = new StringBuilder();
+		sb.append("<b>").append(table).append("</b><br/><br/>");
+		
+		KxDataModel model = new KxDataModel(flip);
+		int rows = model.getRowCount();
+		int cols = model.getColumnCount();
+		
+		sb.append("<table id=\"").append(table).append("\" border=\"1\">");
+		// header <b></b>
+		
+		sb.append("<tr BGCOLOR=\"#99CCFF\">");
+		for (int i = 0; i < cols; i++) {
+			sb.append("<td>").append(model.getColumnName(i)).append("</td>");
+		}
+		sb.append("</tr>");
+		
+		for (int rowIndex = 0; rowIndex < rows; rowIndex++) {
+			
+			if (rowIndex % 2 == 1) 
+				sb.append("<tr BGCOLOR=\"#99CCFF\">");
+			else 
+				sb.append("<tr>");
+			
+			for (int columnIndex = 0; columnIndex < cols; columnIndex++) {
+				Object cell = model.getValueAt(rowIndex, columnIndex);
+				sb.append("<td>").append(cell == null ? "" : cell).append("");
 			}
 			sb.append("</tr>");
 		}
@@ -289,7 +399,7 @@ public class KdbService2 {
 	}
 	
 	public static void main(String[] args) {
-		String configFile = "C:/home/gfeng/workspace-sts/embedded-jetty-example/config/atdb.conf";
+		String configFile = "C:/Users/gfeng/git/myweb/src/main/webapp/config/atdb.properties";
 		String sqlPath = "config";
 		final BlockingQueue<Object> queue = new LinkedBlockingQueue<Object>();
 		

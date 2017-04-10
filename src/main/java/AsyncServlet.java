@@ -15,6 +15,7 @@ import org.apache.log4j.LogManager;
 import org.apache.log4j.Logger;
 import org.codehaus.jettison.json.JSONArray;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -66,15 +67,21 @@ public final class AsyncServlet extends HttpServlet {
 			log.error(";" + url.getFile());
 		}
 
+		String ROOT = this.getServletContext().getContextPath();
 		log.info("HTTP ROOT: " + this.getServletContext().getContextPath());
 		System.out.println("HTTP ROOT: " + this.getServletContext().getContextPath());
+		
+		File file = new File(ROOT);
+		String rootPath = file.getAbsolutePath();
+		
+		log.info("HTTP ROOT absolutePath: " + rootPath);
 		
 		// load servlet configs
 		ServletConfig config = this.getServletConfig();
 		ServletContext context = getServletContext();
 		
-		String kdbConfig = config.getInitParameter("kdbConfig");
-		String sqlPath = config.getInitParameter("sqlPath");
+		String kdbConfig = rootPath+"/"+config.getInitParameter("kdbConfig");
+		String sqlPath = rootPath+"/"+config.getInitParameter("sqlPath");
 		
 		System.out.println(String.format("loading Kdb config/sql dir : %s, %s", kdbConfig, sqlPath));
 		
@@ -99,8 +106,10 @@ public final class AsyncServlet extends HttpServlet {
 	@Override
 	public void service(HttpServletRequest request, HttpServletResponse response) {
 		log.info(String.format(
-				"QQQQ:<-- req: %s, path: %s, uri: %s, protocol: %s", request,
-				request.getContextPath(), request.getRequestURI(),
+				"QQQQ:<-- req: %s, path: %s, uri: %s, protocol: %s", 
+				request,
+				request.getContextPath(), 
+				request.getRequestURI(),
 				response.getStatus()));
 
 		final AsyncContext async = request.startAsync();
@@ -137,7 +146,7 @@ public final class AsyncServlet extends HttpServlet {
 	}
 	
 	private void processResponse(final AsyncContext async, final HttpSession session) {
-		System.out.println("xxxx processing async update: ");
+		System.out.println("xxxx processing async update: " + new Date());
 		
 		executor.execute(new Runnable() {
 			@Override
@@ -150,21 +159,24 @@ public final class AsyncServlet extends HttpServlet {
 					sb.append("<br>");
 					sb.append("<h><font face='Arial' size='-1'><em>Last update: ");
 					sb.append(new Date());
+					sb.append("<br/>");
 					
-					String html = (String) queue.take();
-					sb.append(html);
-					System.out.println("xxxx sending data to ->UI: " + sb.toString());
+					//String html = (String) queue.take();
+					//sb.append(html);
+					//System.out.println("xxxx sending data to ->UI: " + sb.toString());
 					
 					ServletResponse response = async.getResponse();
-					JSONArray data = new JSONArray();
-					data.put(sb.toString());
-					
+					//JSONArray data = new JSONArray();
+					//data.put(sb.toString());
+					JSONArray data = (JSONArray) queue.take();
+					//System.out.println("xxxx sending data to ->UI: " + data.toString());
+					System.out.println("xxxx sending data to ->UI: " + data.length());
+										
 					if (response != null) {
-						System.out.println("xxxx sending data to ->UI: " + sb.toString());
-						log.info("UI---->");
+						//System.out.println("xxxx sending data to ->UI: " + sb.toString());
+						log.info("UI---->" + sb.toString());
 						response.getWriter().write(data.toString());
-						async.complete();
-						
+						async.complete();						
 					} else {
 						throw new IllegalStateException();  // this is caught below
 					}
